@@ -15,14 +15,13 @@ def is_our_packet(raw_packet: bytes,
     our_addresses = [BROADCAST_MAC, unicast_address, multicast_address]
     if raw_packet and raw_packet[:MAC_ADDR_LEN] in our_addresses:
         return True
-    else:
-        return False
+    return False
 
 def parse_eth_frame(raw_packet: bytes)-> Tuple[bytes, ...]:
     """
     parses ethernet packets and returns the type and raw data
     :param raw_packet: raw packet bytes
-    :return: tuple
+    :return: tuple with dst mac, src mac, ether type and the packets data
     """
     headers_size = calcsize(ETH_PACKET_FORMAT_STRING)
     dst_mac, src_mac, ether_type = unpack_from(ETH_PACKET_FORMAT_STRING, raw_packet)
@@ -32,6 +31,5 @@ def make_eth_packet(dst_mac: bytes, src_mac: bytes, ether_type: bytes, data: byt
     """
     build ether packet and return bytes of full packet
     """
-
     packet = dst_mac + src_mac + ether_type + data
     return packet
