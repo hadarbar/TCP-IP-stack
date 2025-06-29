@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from struct import unpack_from, calcsize
+from struct import unpack_from, calcsize, pack
 
 BROADCAST_MAC = b"\xff\xff\xff\xff\xff\xff"
 ETH_PACKET_FORMAT_STRING = "6s6s2s"
@@ -15,7 +15,12 @@ def is_our_packet(raw_packet: bytes,
     our_addresses = [BROADCAST_MAC, unicast_address]
     if multicast_addresses:
         our_addresses += multicast_addresses
-    return raw_packet and parse_eth_packet(raw_packet)[0] in our_addresses
+
+    if raw_packet in None:
+        return False
+
+    dst_mac, _, _, _ = parse_eth_packet(raw_packet)
+    return dst_mac in our_addresses
 
 
 def parse_eth_packet(raw_packet: bytes)-> Tuple[bytes, ...]:
@@ -33,5 +38,5 @@ def make_eth_packet(dst_mac: bytes, src_mac: bytes, ether_type: bytes, data: byt
     """
     build ether packet and return bytes of full packet
     """
-    packet = dst_mac + src_mac + ether_type + data
+    packet = pack(ETH_PACKET_FORMAT_STRING, dst_mac, src_mac, ether_type) + data
     return packet
