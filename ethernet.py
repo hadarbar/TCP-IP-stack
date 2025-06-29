@@ -4,7 +4,6 @@ from scapy.all import conf
 
 BROADCAST_MAC = b"\xff\xff\xff\xff\xff\xff"
 ETH_PACKET_FORMAT_STRING = "6s6s2s"
-ETHER_TYPES = {b"\x08\x06": "ARP"}
 MAC_ADDR_LEN = 6
 
 
@@ -56,3 +55,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
