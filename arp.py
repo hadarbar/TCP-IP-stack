@@ -1,12 +1,15 @@
 import ethernet
 from struct import pack, unpack_from
 from typing import Tuple
+from scapy.all import conf
 
-ARP_START = b"\x00\x01\x08\x00\x06\x04"
+
+ARP_START_BYTES = b"\x00\x01\x08\x00\x06\x04"
 OPERATION_REQUEST = 1
 OPERATION_REPLY = 2
-
+ARP_ETHER_TYPE = b"\x08\x06"
 ARP_PACKET_FORMAT_STRING = ">6sh6s4s6s4s"
+
 
 def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
     """
@@ -16,7 +19,7 @@ def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
     dst_ip_bytes = ip_str_to_bytes(dst_ip)
     src_ip_bytes = ip_str_to_bytes(src_ip)
     arp_data = pack(ARP_PACKET_FORMAT_STRING,
-                         ARP_START,
+                         ARP_START_BYTES,
                          OPERATION_REQUEST,
                          bytes.fromhex(src_mac.replace(":", "")),
                          src_ip_bytes,
@@ -24,9 +27,10 @@ def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
                          dst_ip_bytes)
     packet = ethernet.make_eth_packet(ethernet.BROADCAST_MAC,
                                       bytes.fromhex(src_mac.replace(":", "")),
-                                      ethernet.ETHER_TYPES["ARP"],
+                                      ARP_ETHER_TYPE,
                                       arp_data)
     return packet
+
 
 def make_arp_reply(dst_ip: str, src_ip: str, dst_mac: str, src_mac: str) -> bytes:
     """
@@ -36,7 +40,7 @@ def make_arp_reply(dst_ip: str, src_ip: str, dst_mac: str, src_mac: str) -> byte
     src_ip_bytes = ip_str_to_bytes(src_ip)
     dst_ip_bytes = ip_str_to_bytes(dst_ip)
     arp_data = pack(ARP_PACKET_FORMAT_STRING,
-                    ARP_START,
+                    ARP_START_BYTES,
                     OPERATION_REPLY,
                     bytes.fromhex(src_mac.replace(":", "")),
                     src_ip_bytes,
@@ -44,14 +48,15 @@ def make_arp_reply(dst_ip: str, src_ip: str, dst_mac: str, src_mac: str) -> byte
                     dst_ip_bytes)
     packet = ethernet.make_eth_packet(bytes.fromhex(dst_mac.replace(":", "")),
                                       bytes.fromhex(src_mac.replace(":", "")),
-                                      ethernet.ETHER_TYPES["ARP"], arp_data)
+                                      ARP_ETHER_TYPE, arp_data)
     return packet
+
 
 def parse_arp_packet(raw_data: bytes) -> Tuple[int, str, str, str, str]:
     """
     parse arp packet
-    :param raw_data: data of layer two
-    :return:
+    :param raw_data: raw data of arp packet
+    :return: fields of arp packet
     """
     headers, operation, src_mac, src_ip, dst_mac, dst_ip = unpack_from(ARP_PACKET_FORMAT_STRING, raw_data)
     src_ip_str = ip_bytes_to_str(src_ip)
@@ -67,12 +72,14 @@ def ip_str_to_bytes(ip: str) -> bytes:
     ip_bytes = [int(b).to_bytes() for b in ip_values]
     return b"".join(ip_bytes)
 
+
 def ip_bytes_to_str(ip: bytes) -> str:
     """
     convert ip in bytes to ip string
     """
     ip_string = ".".join([str(b) for b in ip])
     return ip_string
+
 
 def print_arp(raw_data: bytes) -> None:
     """
@@ -85,3 +92,26 @@ def print_arp(raw_data: bytes) -> None:
     else:
         print("ARP reply:")
         print(f"{src_ip} is at {src_mac}")
+
+
+def main():
+    iface = "Intel(R) Wi-Fi 6 AX201 160MHz"
+    sock = conf.L2socket(iface=iface, promisc=True)
+    my_mac = "3C:58:C2:A8:06:C4"
+
+    arp_request = make_arp_request("10.0.0.1", "111.111.111.111", my_mac)
+    sock.send(arp_request)
+    arp_reply = make_arp_reply("1.1.1.1", "2.2.2.2", "12:34:56:78:90:12", my_mac)
+    sock.send(arp_reply)
+
+    while True:
+        recv = sock.recv_raw()
+        if ethernet.is_our_packet(recv[1], bytes.fromhex(my_mac.replace(":", ""))):
+            dst_mac, src_mac, ether_type, data = ethernet.parse_eth_packet(recv[1])
+            if ether_type == ARP_ETHER_TYPE:
+                print_arp(data)
+
+
+if __name__ == "__main__":
+    main()
+
