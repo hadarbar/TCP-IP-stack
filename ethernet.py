@@ -1,6 +1,5 @@
 from typing import List, Tuple
 from struct import unpack_from, calcsize
-from scapy.all import conf
 
 BROADCAST_MAC = b"\xff\xff\xff\xff\xff\xff"
 ETH_PACKET_FORMAT_STRING = "6s6s2s"
@@ -36,22 +35,3 @@ def make_eth_packet(dst_mac: bytes, src_mac: bytes, ether_type: bytes, data: byt
     """
     packet = dst_mac + src_mac + ether_type + data
     return packet
-
-
-def main():
-    iface = "Intel(R) Wi-Fi 6 AX201 160MHz"
-    sock = conf.L2socket(iface=iface, promisc=True)
-    my_mac = b"\x3c\x58\xc2\xa8\x06\xc4"
-    recv = sock.recv_raw()
-    sock.send(make_eth_packet(BROADCAST_MAC, my_mac, b"\x08\x06", b"hello"))
-    while True:
-        if is_our_packet(recv[1], my_mac):
-            dst_mac, src_mac, ether_type, data = parse_eth_packet(recv[1])
-            print(f"dst mac: {dst_mac.hex(':')}")
-            print(f"src mac: {src_mac.hex(':')}")
-            print(f"{ether_type=}")
-            print(f"{data=}")
-
-
-if __name__ == "__main__":
-    main()
