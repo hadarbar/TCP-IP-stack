@@ -16,7 +16,7 @@ def is_our_packet(raw_packet: bytes,
     if multicast_addresses:
         our_addresses += multicast_addresses
 
-    if raw_packet in None:
+    if raw_packet is None:
         return False
 
     dst_mac, _, _, _ = parse_eth_packet(raw_packet)
