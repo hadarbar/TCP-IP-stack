@@ -1,16 +1,20 @@
-import ethernet
-from struct import pack, unpack_from
-from typing import Tuple, Optional
 from enum import Enum
+from typing import Tuple, Optional
+from struct import pack, unpack_from
+
 from scapy.all import conf
+
+import ethernet
 
 
 ARP_CONST_FIELDS_IPV4 = b"\x00\x01\x08\x00\x06\x04"
 ARP_ETHER_TYPE = b"\x08\x06"
 ARP_PACKET_FORMAT_STRING = ">6sh6s4s6s4s"
+
 class ArpOperations(Enum):
     REQUEST = 1
     REPLY = 2
+
 
 def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
     """
@@ -108,21 +112,3 @@ def send_arp_reply(socket: conf.L2socket, dst_ip: str, src_ip: str, dst_mac: str
     make and send arp reply through socket
     """
     socket.send(make_arp_reply(dst_ip, src_ip, dst_mac, src_mac))
-
-def recv_arp(socket: conf.L2socket, socket_mac: str, verbose: bool = True) -> Optional[Tuple[int, str, str, str, str]]:
-    """
-    receive arp packet and return its fields
-    :param socket: socket to receive packets from
-    :param socket_mac: mac of socket iface
-    :param verbose: if true print the packet that arrived
-    :return: fields of arp packet
-    """
-    while True:
-        recv = socket.recv_raw()
-        if recv[1]:
-            if ethernet.is_our_packet(recv[1], bytes.fromhex(socket_mac.replace(":", ""))):
-                dst_mac, src_mac, ether_type, data = ethernet.parse_eth_packet(recv[1])
-                if ether_type == ARP_ETHER_TYPE:
-                    if verbose:
-                        print_arp(data)
-                    return parse_arp_packet(data)
