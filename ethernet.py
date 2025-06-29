@@ -35,4 +35,3 @@ def make_eth_packet(dst_mac: bytes, src_mac: bytes, ether_type: bytes, data: byt
     """
     packet = dst_mac + src_mac + ether_type + data
     return packet
-    
