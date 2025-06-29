@@ -1,15 +1,16 @@
 import ethernet
 from struct import pack, unpack_from
-from typing import Tuple
+from typing import Tuple, Optional
+from enum import Enum
 from scapy.all import conf
 
 
-ARP_START_BYTES = b"\x00\x01\x08\x00\x06\x04"
-OPERATION_REQUEST = 1
-OPERATION_REPLY = 2
+ARP_CONST_FIELDS_IPV4 = b"\x00\x01\x08\x00\x06\x04"
 ARP_ETHER_TYPE = b"\x08\x06"
 ARP_PACKET_FORMAT_STRING = ">6sh6s4s6s4s"
-
+class ArpOperations(Enum):
+    REQUEST = 1
+    REPLY = 2
 
 def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
     """
@@ -19,8 +20,8 @@ def make_arp_request(dst_ip: str, src_ip: str, src_mac: str) -> bytes:
     dst_ip_bytes = ip_str_to_bytes(dst_ip)
     src_ip_bytes = ip_str_to_bytes(src_ip)
     arp_data = pack(ARP_PACKET_FORMAT_STRING,
-                         ARP_START_BYTES,
-                         OPERATION_REQUEST,
+                         ARP_CONST_FIELDS_IPV4,
+                         ArpOperations.REQUEST.value,
                          bytes.fromhex(src_mac.replace(":", "")),
                          src_ip_bytes,
                          ethernet.BROADCAST_MAC,
@@ -40,8 +41,8 @@ def make_arp_reply(dst_ip: str, src_ip: str, dst_mac: str, src_mac: str) -> byte
     src_ip_bytes = ip_str_to_bytes(src_ip)
     dst_ip_bytes = ip_str_to_bytes(dst_ip)
     arp_data = pack(ARP_PACKET_FORMAT_STRING,
-                    ARP_START_BYTES,
-                    OPERATION_REPLY,
+                    ARP_CONST_FIELDS_IPV4,
+                    ArpOperations.REPLY.value,
                     bytes.fromhex(src_mac.replace(":", "")),
                     src_ip_bytes,
                     bytes.fromhex(dst_mac.replace(":", "")),
@@ -86,31 +87,42 @@ def print_arp(raw_data: bytes) -> None:
     print arp packet nicely
     """
     operation, src_mac, src_ip, dst_mac, dst_ip = parse_arp_packet(raw_data)
-    if operation == OPERATION_REQUEST:
+    if operation == ArpOperations.REQUEST.value:
         print("ARP request:")
-        print(f"Who has {dst_ip}? Tell {src_ip}")
     else:
         print("ARP reply:")
-        print(f"{src_ip} is at {src_mac}")
 
+    print(f"{src_ip=}")
+    print(f"{src_mac=}")
+    print(f"{dst_ip=}")
+    print(f"{dst_mac=}")
 
-def main():
-    iface = "Intel(R) Wi-Fi 6 AX201 160MHz"
-    sock = conf.L2socket(iface=iface, promisc=True)
-    my_mac = "3C:58:C2:A8:06:C4"
+def send_arp_request(socket: conf.L2socket, dst_ip: str, src_ip: str, src_mac: str) -> None:
+    """
+    make and send arp request through socket
+    """
+    socket.send(make_arp_request(dst_ip, src_ip, src_mac))
 
-    arp_request = make_arp_request("10.0.0.1", "111.111.111.111", my_mac)
-    sock.send(arp_request)
-    arp_reply = make_arp_reply("1.1.1.1", "2.2.2.2", "12:34:56:78:90:12", my_mac)
-    sock.send(arp_reply)
+def send_arp_reply(socket: conf.L2socket, dst_ip: str, src_ip: str, dst_mac: str, src_mac: str) -> None:
+    """
+    make and send arp reply through socket
+    """
+    socket.send(make_arp_reply(dst_ip, src_ip, dst_mac, src_mac))
 
+def recv_arp(socket: conf.L2socket, socket_mac: str, verbose: bool = True) -> Optional[Tuple[int, str, str, str, str]]:
+    """
+    receive arp packet and return its fields
+    :param socket: socket to receive packets from
+    :param socket_mac: mac of socket iface
+    :param verbose: if true print the packet that arrived
+    :return: fields of arp packet
+    """
     while True:
-        recv = sock.recv_raw()
-        if ethernet.is_our_packet(recv[1], bytes.fromhex(my_mac.replace(":", ""))):
-            dst_mac, src_mac, ether_type, data = ethernet.parse_eth_packet(recv[1])
-            if ether_type == ARP_ETHER_TYPE:
-                print_arp(data)
-
-
-if __name__ == "__main__":
-    main()
+        recv = socket.recv_raw()
+        if recv[1]:
+            if ethernet.is_our_packet(recv[1], bytes.fromhex(socket_mac.replace(":", ""))):
+                dst_mac, src_mac, ether_type, data = ethernet.parse_eth_packet(recv[1])
+                if ether_type == ARP_ETHER_TYPE:
+                    if verbose:
+                        print_arp(data)
+                    return parse_arp_packet(data)
